@@ -1,0 +1,5 @@
+{
+  "name": "Alchemy Brush",
+  "description": "A browser-based generative art tool for drawing with a mirror effect and a dynamic shape brush that uses a shuffling set of SVG vectors, inspired by the open-source art application Alchemy.",
+  "requestFramePermissions": []
+}
