@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchemy Clone - Experimental Drawing</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --panel-bg: rgba(40, 40, 40, 0.95);
+            --text-color: #e0e0e0;
+            --accent-color: #d32f2f; /* Classic Alchemy red accent */
+            --btn-hover: #444;
+            --border-color: #555;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-color);
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: crosshair;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* Preview canvas sits on top for temporary strokes */
+        #preview-canvas {
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Toolbar Styles */
+        #toolbar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 280px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(5px);
+            border-left: 4px solid var(--accent-color);
+            padding: 15px;
+            border-radius: 2px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: opacity 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* Scrollbar for toolbar */
+        #toolbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        #toolbar::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 3px;
+        }
+
+        #toolbar.faded {
+            opacity: 0.1;
+        }
+        #toolbar:hover {
+            opacity: 1;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 5px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #888;
+            font-weight: bold;
+        }
+
+        /* Custom Button Grid */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 5px;
+        }
+        
+        /* 5 column grid for modules now that we have 5 */
+        .btn-grid-5 {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+        }
+
+        /* Specific grid for affects (4 cols to fit Drift) */
+        .btn-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+        }
+
+        button {
+            background: #333;
+            border: 1px solid var(--border-color);
+            color: #ccc;
+            padding: 8px 4px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.1s;
+            border-radius: 2px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 4px;
+            min-height: 50px;
+        }
+
+        button:hover {
+            background: var(--btn-hover);
+            border-color: #777;
+            color: white;
+        }
+
+        button.active {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+            color: white;
+        }
+
+        button svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        /* Range Sliders */
+        input[type=range] {
+            width: 100%;
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            margin-top: -5px;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 2px;
+            background: #555;
+        }
+        
+        /* Color Picker styling */
+        .color-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #333;
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 2px;
+        }
+        
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 30px;
+            height: 30px;
+            background: none;
+            padding: 0;
+            cursor: pointer;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch {
+            border: none;
+            border-radius: 2px;
+        }
+
+        /* Palette Controls */
+        .palette-panel {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            background: #2a2a2a;
+            padding: 8px;
+            border-radius: 2px;
+            border: 1px dashed #444;
+        }
+        .palette-panel.visible {
+            display: flex;
+        }
+        .palette-preview {
+            width: 100%;
+            height: 14px;
+            border-radius: 2px;
+            background: #333;
+            border: 1px solid #000;
+        }
+        .palette-btns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+        .palette-btns button {
+            min-height: 25px;
+            font-size: 9px;
+            background: #444;
+        }
+
+        /* Quick Color Swatches */
+        .quick-colors {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+            margin-top: 5px;
+        }
+        .color-swatch {
+            height: 20px;
+            border: 1px solid #555;
+            cursor: pointer;
+            border-radius: 2px;
+            background: #000;
+            transition: border-color 0.1s;
+        }
+        .color-swatch:hover {
+            border-color: #fff;
+        }
+        #swatch-prev {
+            border: 1px dashed #888;
+            position: relative;
+        }
+        #swatch-prev::after {
+            content: '↺';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 10px;
+            text-shadow: 0 0 2px #000;
+            pointer-events: none;
+        }
+
+        /* Vector Library Styles */
+        .vector-library {
+            border: 1px solid var(--border-color);
+            background: #222;
+            padding: 5px;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none; /* Hidden unless Vector mode is active */
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .vector-library.visible {
+            display: flex;
+        }
+
+        .vector-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px;
+            background: #333;
+            font-size: 11px;
+            border-bottom: 1px solid #444;
+        }
+
+        .vector-item input[type="checkbox"] {
+            accent-color: var(--accent-color);
+            cursor: pointer;
+        }
+        
+        .vector-item span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* File Upload Styling */
+        .file-upload-btn {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            width: 100%;
+            background: #444;
+            min-height: 30px;
+            flex-direction: row;
+        }
+        .file-upload-btn input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .status-bar {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 10px;
+            color: #555;
+            z-index: 5;
+            text-align: right;
+        }
+
+        .mic-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+            margin-left: 5px;
+        }
+        .mic-indicator.on {
+            background: #0f0;
+            box-shadow: 0 0 5px #0f0;
+        }
+
+        #mic-permission {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #d32f2f;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            z-index: 100;
+            font-weight: bold;
+            border-radius: 4px;
+            display: block; /* JS will hide */
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Mic Permission Button -->
+    <button id="mic-permission">ENABLE MIC FOR MAGIC</button>
+
+    <div id="toolbar">
+        <h1>Alchemy <span style="font-size: 0.6em; color:#666;">WEB</span></h1>
+
+        <!-- Brushes -->
+        <div class="control-group">
+            <div class="control-label">Module</div>
+            <div class="btn-grid-5">
+                <button class="mode-btn active" data-mode="basic" title="Standard Line">
+                    <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                    Line
+                </button>
+                <button class="mode-btn" data-mode="speed" title="Thickness based on Speed">
+                    <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+                    Speed
+                </button>
+                <button class="mode-btn" data-mode="shapes" title="Random Geometric Shapes">
+                    <svg viewBox="0 0 24 24"><path d="M2 2h20v20H2z" fill="none"/><path d="M12 2L2 22h20L12 2zm0 3.5L18.5 19H5.5L12 5.5z"/></svg>
+                    Shapes
+                </button>
+                <button class="mode-btn" data-mode="vector" title="Custom Vector Brush">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                    Vector
+                </button>
+                <button class="mode-btn" data-mode="outline" title="Lasso Fill / Solid Outline">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z"/></svg>
+                    Fill
+                </button>
+            </div>
+            
+            <!-- Vector Library UI (Only visible in Vector Mode) -->
+            <div id="vector-panel" class="control-group" style="display:none; margin-top:5px; border-top:1px solid #444; padding-top:5px;">
+                <div class="control-label">Vector Library</div>
+                
+                <button class="file-upload-btn" title="Upload SVG files">
+                    <svg viewBox="0 0 24 24" style="width:14px; height:14px; margin-right:5px;"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                    Upload SVGs
+                    <input type="file" id="vector-upload" accept=".svg" multiple>
+                </button>
+
+                <div id="vector-list" class="vector-library visible">
+                    <div style="padding:10px; text-align:center; color:#666; font-size:10px;">No vectors loaded</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Affects -->
+        <div class="control-group">
+            <div class="control-label">Affect</div>
+            <div class="btn-grid-4">
+                <button id="btn-mirror-x" title="Mirror Horizontal">
+                    <svg viewBox="0 0 24 24"><path d="M12 2v20M6 6l-4 4 4 4M18 6l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                    Mir X
+                </button>
+                <button id="btn-mirror-y" title="Mirror Vertical">
+                    <svg viewBox="0 0 24 24"><path d="M2 12h20M6 6l4-4 4 4M6 18l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                    Mir Y
+                </button>
+                <button id="btn-mic" title="Control Size with Voice">
+                    <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                    Mic
+                </button>
+                <button id="btn-drift" title="Drift - Auto Color Change">
+                    <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                    Drift
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="control-group">
+            <div class="control-label">Properties</div>
+            
+            <div class="color-wrapper">
+                <input type="color" id="color-picker" value="#ffffff">
+                <span style="font-size: 11px; color: #aaa;">Brush Color</span>
+            </div>
+
+            <!-- Quick Colors -->
+            <div class="quick-colors">
+                <div id="swatch-prev" class="color-swatch" title="Swap with Previous Color" style="background-color: #000000;" data-color="#000000"></div>
+                <!-- Favs -->
+                <div class="color-swatch" title="Right-click to save current color" style="background-color: #ffffff;" data-color="#ffffff"></div>
+                <div class="color-swatch" title="Right-click to save current color" style="background-color: #000000;" data-color="#000000"></div>
+                <div class="color-swatch" title="Right-click to save current color" style="background-color: #808080;" data-color="#808080"></div>
+                <div class="color-swatch" title="Right-click to save current color" style="background-color: #d32f2f;" data-color="#d32f2f"></div>
+            </div>
+
+            <!-- Global Properties (Moved Up) -->
+            <label style="font-size: 10px; display:flex; justify-content:space-between; margin-top:5px;">Opacity <span id="opacity-val">50%</span></label>
+            <input type="range" id="opacity-range" min="1" max="100" value="50">
+            
+            <label style="font-size: 10px; display:flex; justify-content:space-between; margin-top:5px;">Base Size <span id="size-val">5px</span></label>
+            <input type="range" id="size-range" min="1" max="100" value="5">
+
+            <!-- Palette Control Panel (Drift Mode) -->
+            <div id="palette-panel" class="palette-panel" style="margin-top:8px;">
+                <div class="control-label">Drift Palette</div>
+                <div id="palette-preview" class="palette-preview"></div>
+                <div class="palette-btns">
+                    <button id="btn-pal-random">Randomize</button>
+                    <button id="btn-pal-harmony">Harmony</button>
+                </div>
+                <label style="font-size: 10px;">Fade Speed</label>
+                <input type="range" id="drift-speed" min="1" max="50" value="10">
+            </div>
+
+             <button id="btn-blind" style="width:100%; margin-top:5px;">Blind Mode (Hide Cursor)</button>
+        </div>
+
+        <!-- Actions -->
+        <div class="control-group" style="margin-top: auto; border-top: 1px solid #444; padding-top: 10px;">
+            <div class="btn-grid-4" style="grid-template-columns: 1fr 1fr;">
+                <button id="btn-clear" style="background: #222;">Clear [C]</button>
+                <button id="btn-save" style="background: #222;">Save [S]</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        Mic Status <div id="mic-indicator" class="mic-indicator"></div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+        <canvas id="preview-canvas"></canvas>
+    </div>
+
+<script>
+/**
+ * ALCHEMY CLONE LOGIC
+ */
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+const previewCanvas = document.getElementById('preview-canvas');
+const previewCtx = previewCanvas.getContext('2d');
+const container = document.getElementById('canvas-container');
+
+// State
+const state = {
+    isDrawing: false,
+    x: 0, 
+    y: 0,
+    lastX: 0, 
+    lastY: 0,
+    
+    // Settings
+    mode: 'basic', // basic, speed, shapes, vector, outline
+    mirrorX: false,
+    mirrorY: false,
+    micEnabled: false, 
+    blindMode: false,
+    driftEnabled: false,
+    
+    // Properties
+    baseSize: 5,
+    opacity: 0.5,
+    color: '#ffffff',
+    prevColor: '#000000', // Store previous color
+    tempColor: '#ffffff', // Temp storage for picker interaction
+    
+    // Outline Mode Data
+    currentPath: [], // Stores raw input points for outline mode
+
+    // Drift Logic
+    palette: ['#ff0000', '#00ff00', '#0000ff'],
+    driftSpeed: 10,
+    
+    // Vector Library
+    vectorSets: [], 
+
+    // Audio Context
+    audioCtx: null,
+    analyser: null,
+    dataArray: null,
+    micVolume: 0
+};
+
+// --- CANVAS SETUP ---
+function resize() {
+    const saved = canvas.toDataURL();
+    
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    previewCanvas.width = window.innerWidth;
+    previewCanvas.height = window.innerHeight;
+    
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const img = new Image();
+    img.src = saved;
+    img.onload = () => ctx.drawImage(img, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- AUDIO ENGINE ---
+async function initAudio() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        state.analyser = state.audioCtx.createAnalyser();
+        const source = state.audioCtx.createMediaStreamSource(stream);
+        source.connect(state.analyser);
+        state.analyser.fftSize = 256;
+        state.dataArray = new Uint8Array(state.analyser.frequencyBinCount);
+        
+        document.getElementById('mic-permission').style.display = 'none';
+        document.getElementById('mic-indicator').classList.add('on');
+        updateAudioLoop();
+    } catch (err) {
+        console.error("Audio init failed", err);
+        alert("Microphone access denied or not found.");
+    }
+}
+
+function updateAudioLoop() {
+    if (!state.analyser) return;
+    requestAnimationFrame(updateAudioLoop);
+    state.analyser.getByteFrequencyData(state.dataArray);
+    let sum = 0;
+    for(let i = 0; i < state.dataArray.length; i++) sum += state.dataArray[i];
+    state.micVolume = Math.min((sum / state.dataArray.length) / 100, 1.5); 
+}
+document.getElementById('mic-permission').addEventListener('click', initAudio);
+
+// --- DRIFT COLOR ENGINE ---
+
+function generatePalette(type) {
+    const colors = [];
+    if (type === 'random') {
+        for(let i=0; i<5; i++) {
+            colors.push(`hsl(${Math.floor(Math.random() * 360)}, ${70 + Math.random()*30}%, ${50 + Math.random()*20}%)`);
+        }
+    } else if (type === 'harmony') {
+        const baseHue = Math.random() * 360;
+        for(let i=0; i<5; i++) {
+            const hue = (baseHue + (i * 30)) % 360; 
+            colors.push(`hsl(${hue}, 70%, 60%)`);
+        }
+    }
+    state.palette = colors;
+    updatePalettePreview();
+}
+
+function updatePalettePreview() {
+    const el = document.getElementById('palette-preview');
+    el.style.background = `linear-gradient(to right, ${state.palette.join(', ')})`;
+}
+
+function getDriftColor() {
+    if (!state.driftEnabled) return state.color;
+    const speed = state.driftSpeed * 0.0005;
+    const t = Date.now() * speed;
+    const len = state.palette.length;
+    const i = Math.floor(t) % len;
+    return state.palette[i];
+}
+
+generatePalette('harmony');
+
+// --- HELPER FUNCTIONS ---
+
+// Safe input coordinate extraction
+function getPointerPos(e) {
+    if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+}
+
+function getMirrorPoints(x, y) {
+    const points = [{x, y}];
+    const w = canvas.width;
+    const h = canvas.height;
+    if (state.mirrorX) points.push({x: w - x, y: y});
+    if (state.mirrorY) {
+        const len = points.length;
+        for(let i=0; i<len; i++) points.push({x: points[i].x, y: h - points[i].y});
+    }
+    return points;
+}
+
+// --- DRAWING ENGINE ---
+
+function startDrawing(e) {
+    state.isDrawing = true;
+    const pos = getPointerPos(e);
+    [state.lastX, state.lastY] = [pos.x, pos.y];
+    
+    if (state.mode === 'outline') {
+        state.currentPath = [{x: pos.x, y: pos.y}];
+    } else {
+        draw(e);
+    }
+}
+
+function stopDrawing() {
+    if (!state.isDrawing) return;
+    state.isDrawing = false;
+    
+    // Finish Outline Mode
+    if (state.mode === 'outline') {
+        finishOutline();
+    }
+    
+    ctx.beginPath();
+}
+
+function finishOutline() {
+    if (state.currentPath.length < 3) {
+        previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        state.currentPath = [];
+        return;
+    }
+
+    // We need to generate shapes for the main path AND its mirrors
+    // It's easiest to just iterate the points and transform them
+    
+    // Determine fill color (snapshot current drift color)
+    const fillColor = getDriftColor();
+    ctx.fillStyle = fillColor;
+    ctx.globalAlpha = state.opacity;
+    
+    // How many mirror instances do we have?
+    // Let's assume standard 1, 2 (X or Y), or 4 (XY)
+    // We can determine this by checking the mirrors for the first point
+    const firstPoints = getMirrorPoints(state.currentPath[0].x, state.currentPath[0].y);
+    const numInstances = firstPoints.length;
+
+    // Loop through each "instance" (Original, MirrorX, MirrorY, MirrorXY)
+    for (let i = 0; i < numInstances; i++) {
+        ctx.beginPath();
+        
+        // Reconstruct the full path for this specific mirror instance
+        for (let j = 0; j < state.currentPath.length; j++) {
+            const rawPt = state.currentPath[j];
+            const mirroredPts = getMirrorPoints(rawPt.x, rawPt.y);
+            const pt = mirroredPts[i]; // Use the i-th mirror for this pass
+            
+            if (j === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+        }
+        
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    // Clear the preview line
+    previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+    state.currentPath = [];
+}
+
+function draw(e) {
+    if (!state.isDrawing) return;
+
+    const pos = getPointerPos(e);
+    const dx = pos.x - state.lastX;
+    const dy = pos.y - state.lastY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    
+    let currentWidth = state.baseSize;
+    if (state.mode === 'speed') currentWidth = Math.max(1, state.baseSize + (dist * 0.5)); 
+    if (state.micEnabled && state.micVolume > 0) currentWidth *= (1 + (state.micVolume * 5));
+
+    // Determine Color
+    const strokeColor = getDriftColor();
+
+    const points = getMirrorPoints(pos.x, pos.y);
+    const lastPoints = getMirrorPoints(state.lastX, state.lastY);
+
+    if (state.mode === 'outline') {
+        // Store point for final shape
+        state.currentPath.push({x: pos.x, y: pos.y});
+        
+        // Draw temporary feedback on preview layer
+        previewCtx.lineCap = 'round';
+        previewCtx.lineJoin = 'round';
+        previewCtx.lineWidth = 2; // Thin line for preview
+        previewCtx.strokeStyle = strokeColor;
+        
+        for (let i = 0; i < points.length; i++) {
+            previewCtx.beginPath();
+            previewCtx.moveTo(lastPoints[i].x, lastPoints[i].y);
+            previewCtx.lineTo(points[i].x, points[i].y);
+            previewCtx.stroke();
+        }
+    } 
+    else {
+        // Normal Drawing
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalAlpha = state.opacity;
+        ctx.strokeStyle = strokeColor;
+        ctx.fillStyle = strokeColor;
+
+        for (let i = 0; i < points.length; i++) {
+            const p = points[i];
+            const lp = lastPoints[i];
+
+            if (state.mode === 'shapes') {
+                drawProceduralShape(p.x, p.y, currentWidth);
+            } else if (state.mode === 'vector') {
+                drawVectorShape(p.x, p.y, currentWidth);
+            } else {
+                ctx.lineWidth = currentWidth;
+                ctx.beginPath();
+                ctx.moveTo(lp.x, lp.y);
+                ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+            }
+        }
+    }
+
+    state.lastX = pos.x;
+    state.lastY = pos.y;
+}
+
+function drawProceduralShape(x, y, size) {
+    const sides = Math.floor(Math.random() * 3) + 3; 
+    const spread = size * 2;
+    ctx.beginPath();
+    for (let i = 0; i < sides; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const r = spread * (0.5 + Math.random());
+        const px = x + Math.cos(angle) * r;
+        const py = y + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    if (Math.random() > 0.3) ctx.fill();
+    else { ctx.lineWidth = 1; ctx.stroke(); }
+}
+
+function drawVectorShape(x, y, size) {
+    const activeSets = state.vectorSets.filter(s => s.enabled);
+    if (activeSets.length === 0) {
+        drawProceduralShape(x, y, size); 
+        return;
+    }
+    const randomSet = activeSets[Math.floor(Math.random() * activeSets.length)];
+    if (randomSet.paths.length === 0) return;
+    
+    const path = randomSet.paths[Math.floor(Math.random() * randomSet.paths.length)];
+    const dims = randomSet.dimensions;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.random() * Math.PI * 2);
+    const contentSize = Math.max(dims.w, dims.h) || 100; 
+    const scaleFactor = (size * 3) / contentSize; 
+    ctx.scale(scaleFactor, scaleFactor);
+    ctx.translate(-dims.w / 2, -dims.h / 2);
+
+    if (Math.random() > 0.5) ctx.fill(path);
+    else {
+        ctx.lineWidth = 1 / scaleFactor;
+        ctx.stroke(path);
+    }
+    ctx.restore();
+}
+
+// --- VECTOR LIBRARY LOGIC ---
+
+document.getElementById('vector-upload').addEventListener('change', function(e) {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+    files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function(ev) { parseAndAddSVG(file.name, ev.target.result); };
+        reader.readAsText(file);
+    });
+    document.querySelector('[data-mode="vector"]').click();
+});
+
+function parseAndAddSVG(filename, svgText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, "image/svg+xml");
+    const svgEl = doc.querySelector('svg');
+    let w = 100, h = 100;
+    if (svgEl) {
+        if (svgEl.viewBox.baseVal && svgEl.viewBox.baseVal.width > 0) {
+            w = svgEl.viewBox.baseVal.width;
+            h = svgEl.viewBox.baseVal.height;
+        } else if (svgEl.width.baseVal && svgEl.width.baseVal.value > 0) {
+            w = svgEl.width.baseVal.value;
+            h = svgEl.height.baseVal.value;
+        }
+    }
+    const pathEls = doc.querySelectorAll('path');
+    const paths = [];
+    pathEls.forEach(p => {
+        const d = p.getAttribute('d');
+        if(d) paths.push(new Path2D(d));
+    });
+    if (paths.length > 0) {
+        state.vectorSets.push({
+            id: Date.now() + Math.random(),
+            name: filename,
+            paths: paths,
+            dimensions: {w, h},
+            enabled: true
+        });
+        renderVectorList();
+    }
+}
+
+function renderVectorList() {
+    const list = document.getElementById('vector-list');
+    list.innerHTML = '';
+    if (state.vectorSets.length === 0) {
+        list.innerHTML = '<div style="padding:10px; text-align:center; color:#666; font-size:10px;">No vectors loaded</div>';
+        return;
+    }
+    state.vectorSets.forEach(set => {
+        const div = document.createElement('div');
+        div.className = 'vector-item';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = set.enabled;
+        cb.addEventListener('change', (e) => { set.enabled = e.target.checked; });
+        const span = document.createElement('span');
+        span.innerText = `${set.name} (${set.paths.length})`;
+        span.title = set.name;
+        div.appendChild(cb);
+        div.appendChild(span);
+        list.appendChild(div);
+    });
+}
+
+// --- UI EVENTS ---
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        const target = e.currentTarget;
+        target.classList.add('active');
+        state.mode = target.dataset.mode;
+        const vecPanel = document.getElementById('vector-panel');
+        vecPanel.style.display = (state.mode === 'vector') ? 'flex' : 'none';
+    });
+});
+
+document.getElementById('btn-mirror-x').addEventListener('click', function() { state.mirrorX = !state.mirrorX; this.classList.toggle('active'); });
+document.getElementById('btn-mirror-y').addEventListener('click', function() { state.mirrorY = !state.mirrorY; this.classList.toggle('active'); });
+document.getElementById('btn-mic').addEventListener('click', function() {
+    if (!state.audioCtx) document.getElementById('mic-permission').click();
+    state.micEnabled = !state.micEnabled;
+    this.classList.toggle('active');
+});
+document.getElementById('btn-blind').addEventListener('click', function() {
+    state.blindMode = !state.blindMode;
+    this.classList.toggle('active');
+    canvas.style.cursor = state.blindMode ? 'none' : 'crosshair';
+});
+
+// Drift UI
+document.getElementById('btn-drift').addEventListener('click', function() {
+    state.driftEnabled = !state.driftEnabled;
+    this.classList.toggle('active');
+    document.getElementById('palette-panel').classList.toggle('visible', state.driftEnabled);
+});
+document.getElementById('btn-pal-random').addEventListener('click', () => generatePalette('random'));
+document.getElementById('btn-pal-harmony').addEventListener('click', () => generatePalette('harmony'));
+document.getElementById('drift-speed').addEventListener('input', (e) => state.driftSpeed = parseInt(e.target.value));
+
+
+// --- COLOR MANAGEMENT ---
+const colorPicker = document.getElementById('color-picker');
+
+// 1. Handle direct picker input (Live update)
+colorPicker.addEventListener('input', (e) => {
+    state.color = e.target.value;
+});
+
+// 2. Capture color BEFORE picking starts (so we can set it as 'previous' later)
+colorPicker.addEventListener('click', () => {
+    state.tempColor = state.color; 
+});
+
+// 3. Handle picking commit (User closed picker)
+colorPicker.addEventListener('change', (e) => {
+    // Only update history if color actually changed from when we opened picker
+    if (state.tempColor !== state.color) {
+        updatePrevColor(state.tempColor);
+    }
+});
+
+function updatePrevColor(col) {
+    state.prevColor = col;
+    const swatch = document.getElementById('swatch-prev');
+    swatch.style.backgroundColor = col;
+    swatch.dataset.color = col;
+}
+
+function setColor(col) {
+    state.color = col;
+    colorPicker.value = col; // Sync visual picker
+}
+
+// 4. Handle Swatch Clicks
+document.querySelectorAll('.color-swatch').forEach(s => {
+    // Left Click: Pick Color
+    s.addEventListener('click', function() {
+        const clickedColor = this.dataset.color;
+        
+        if (this.id === 'swatch-prev') {
+            // Swap Logic
+            const current = state.color;
+            setColor(state.prevColor);
+            updatePrevColor(current);
+        } else {
+            // Preset Logic
+            // Save current as previous before switching
+            if (state.color !== clickedColor) {
+                updatePrevColor(state.color);
+            }
+            setColor(clickedColor);
+        }
+    });
+
+    // Right Click: Assign Current Color to Slot
+    s.addEventListener('contextmenu', function(e) {
+        e.preventDefault(); // Block browser menu
+
+        // Prevent changing the history swatch
+        if (this.id === 'swatch-prev') return;
+
+        // Assign current brush color to this slot
+        this.style.backgroundColor = state.color;
+        this.dataset.color = state.color;
+        
+        // Visual feedback (quick flash)
+        const originalBorder = this.style.borderColor;
+        this.style.borderColor = '#fff';
+        setTimeout(() => {
+            this.style.borderColor = originalBorder;
+        }, 200);
+    });
+});
+
+document.getElementById('opacity-range').addEventListener('input', (e) => { state.opacity = e.target.value / 100; document.getElementById('opacity-val').innerText = e.target.value + '%'; });
+document.getElementById('size-range').addEventListener('input', (e) => { state.baseSize = parseInt(e.target.value); document.getElementById('size-val').innerText = e.target.value + 'px'; });
+
+document.getElementById('btn-clear').addEventListener('click', () => { ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, canvas.width, canvas.height); });
+document.getElementById('btn-save').addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = `alchemy-sketch-${Date.now()}.png`;
+    link.href = canvas.toDataURL();
+    link.click();
+});
+
+canvas.addEventListener('mousedown', startDrawing);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', stopDrawing);
+canvas.addEventListener('mouseout', stopDrawing);
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDrawing(e); });
+canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); });
+canvas.addEventListener('touchend', stopDrawing);
+
+window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'c') document.getElementById('btn-clear').click();
+    if (e.key.toLowerCase() === 's') document.getElementById('btn-save').click();
+});
+
+renderVectorList();
+
+</script>
+</body>
+</html>
