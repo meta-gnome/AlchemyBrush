@@ -3,3 +3,7 @@ Freature include Uploadable Svg Files for Custom Brushs that can randomnly chang
 more feature to be added.
 Vibecoded with GOogle Ai Studio
 Oct 28th 2025
+
+
+
+Just Added Index.html File a Newer Standalone Version of the App
