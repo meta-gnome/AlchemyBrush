@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchemy Clone - Experimental Drawing</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --panel-bg: rgba(40, 40, 40, 0.95);
+            --text-color: #e0e0e0;
+            --accent-color: #d32f2f; /* Classic Alchemy red accent */
+            --btn-hover: #444;
+            --border-color: #555;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* Prevent scrolling while drawing */
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-color);
+        }
+
+        /* Layout Container */
+        #app-root {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* DOCKED MODE STYLES */
+        body.layout-docked #app-root {
+            display: flex;
+            flex-direction: row;
+        }
+        
+        body.layout-docked #toolbar {
+            position: relative;
+            top: 0;
+            left: 0;
+            height: 100%;
+            max-height: none;
+            border-radius: 0;
+            border-right: 1px solid var(--border-color);
+            border-left: none; /* Remove accent from left in dock mode */
+            box-shadow: none;
+            background: #222;
+            flex-shrink: 0;
+        }
+
+        body.layout-docked #canvas-container {
+            position: relative;
+            flex-grow: 1;
+            left: 0;
+            width: auto;
+        }
+
+        /* Canvas Container */
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: crosshair;
+            background-color: var(--bg-color);
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* Preview canvas sits on top for temporary strokes */
+        #preview-canvas {
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Toolbar Styles */
+        #toolbar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 280px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(5px);
+            border-left: 4px solid var(--accent-color);
+            padding: 15px;
+            border-radius: 2px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: opacity 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* Scrollbar for toolbar */
+        #toolbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        #toolbar::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 3px;
+        }
+
+        /* Only fade in floating mode */
+        body:not(.layout-docked) #toolbar.faded {
+            opacity: 0.1;
+        }
+        body:not(.layout-docked) #toolbar:hover {
+            opacity: 1;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Removed logo-container and logo-img styles */
+
+        #btn-layout-toggle {
+            background: none;
+            border: 1px solid transparent;
+            color: #666;
+            cursor: pointer;
+            padding: 2px;
+        }
+        #btn-layout-toggle:hover {
+            color: #fff;
+            border-color: #444;
+        }
+
+        /* Header Buttons Group */
+        .header-actions {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .header-btn {
+            background: none;
+            border: 1px solid transparent;
+            color: #666;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .header-btn:hover {
+            color: #fff;
+            border-color: #444;
+            background: #333;
+        }
+        .header-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #888;
+            font-weight: bold;
+        }
+
+        /* Custom Button Grid */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 5px;
+        }
+        
+        /* Flexible Module Grid */
+        .btn-grid-modules {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); /* 4 cols, wraps to next line */
+            gap: 5px;
+        }
+
+        /* Specific grid for affects (Updated to 5 cols) */
+        .btn-grid-affects {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+        }
+
+        button {
+            background: #333;
+            border: 1px solid var(--border-color);
+            color: #ccc;
+            padding: 8px 4px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.1s;
+            border-radius: 2px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 4px;
+            min-height: 50px;
+        }
+
+        button:hover {
+            background: var(--btn-hover);
+            border-color: #777;
+            color: white;
+        }
+
+        button.active {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+            color: white;
+        }
+
+        button svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        /* Range Sliders */
+        input[type=range] {
+            width: 100%;
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            margin-top: -5px;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 2px;
+            background: #555;
+        }
+        
+        /* Checkboxes for Dynamics */
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: #ccc;
+        }
+        .checkbox-row input[type="checkbox"] {
+            accent-color: var(--accent-color);
+            cursor: pointer;
+        }
+
+        /* Color Picker styling */
+        .color-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #333;
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 2px;
+        }
+        
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 30px;
+            height: 30px;
+            background: none;
+            padding: 0;
+            cursor: pointer;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch {
+            border: none;
+            border-radius: 2px;
+        }
+
+        /* Palette Controls */
+        .palette-panel {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            background: #2a2a2a;
+            padding: 8px;
+            border-radius: 2px;
+            border: 1px dashed #444;
+        }
+        .palette-panel.visible {
+            display: flex;
+        }
+        .palette-preview {
+            width: 100%;
+            height: 14px;
+            border-radius: 2px;
+            background: #333;
+            border: 1px solid #000;
+        }
+        .palette-btns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+        .palette-btns button {
+            min-height: 25px;
+            font-size: 9px;
+            background: #444;
+        }
+
+        /* Export Dropdown */
+        .export-container {
+            position: relative;
+            width: 100%;
+        }
+        .export-menu {
+            display: none;
+            position: absolute;
+            bottom: 100%; /* Opens upwards */
+            left: 0;
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #555;
+            margin-bottom: 5px;
+            border-radius: 2px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
+            z-index: 20;
+            flex-direction: column;
+        }
+        .export-menu.visible {
+            display: flex;
+        }
+        .export-menu button {
+            width: 100%;
+            text-align: left;
+            padding: 8px 12px;
+            border: none;
+            border-bottom: 1px solid #333;
+            background: none;
+            min-height: auto;
+            flex-direction: row;
+            justify-content: flex-start;
+            gap: 10px;
+        }
+        .export-menu button:last-child {
+            border-bottom: none;
+        }
+        .export-menu button:hover {
+            background: #333;
+            color: #fff;
+        }
+
+        /* Quick Color Swatches */
+        .quick-colors {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+            margin-top: 5px;
+        }
+        .color-swatch {
+            height: 20px;
+            border: 1px solid #555;
+            cursor: pointer;
+            border-radius: 2px;
+            background: #000;
+            transition: border-color 0.1s;
+        }
+        .color-swatch:hover {
+            border-color: #fff;
+        }
+        #swatch-prev {
+            border: 1px dashed #888;
+            position: relative;
+        }
+        #swatch-prev::after {
+            content: '↺';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 10px;
+            text-shadow: 0 0 2px #000;
+            pointer-events: none;
+        }
+
+        /* Vector Library Styles */
+        .vector-library {
+            border: 1px solid var(--border-color);
+            background: #222;
+            padding: 5px;
+            max-height: 150px;
+            overflow-y: auto;
+            display: none; /* Hidden unless Vector mode is active */
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .vector-library.visible {
+            display: flex;
+        }
+
+        .vector-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px;
+            background: #333;
+            font-size: 11px;
+            border-bottom: 1px solid #444;
+        }
+
+        .vector-item input[type="checkbox"] {
+            accent-color: var(--accent-color);
+            cursor: pointer;
+        }
+        
+        .vector-item span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* File Upload Styling */
+        .file-upload-btn {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            width: 100%;
+            background: #444;
+            min-height: 30px;
+            flex-direction: row;
+        }
+        .file-upload-btn input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .status-bar {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 10px;
+            color: #555;
+            z-index: 5;
+            text-align: right;
+        }
+
+        .mic-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+            margin-left: 5px;
+        }
+        .mic-indicator.on {
+            background: #0f0;
+            box-shadow: 0 0 5px #0f0;
+        }
+
+        /* REMOVED: #mic-permission styles */
+    </style>
+</head>
+<body>
+
+    <!-- REMOVED: Mic Permission Button -->
+
+    <div id="app-root">
+        <div id="toolbar">
+            <h1>
+                <span>Alchemy</span>
+                <div class="header-actions">
+                    <button id="btn-clear" class="header-btn" title="Clear Canvas [C]">
+                        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </button>
+                    <button id="btn-layout-toggle" class="header-btn" title="Toggle Docked/Floating Mode">
+                        <!-- Icon toggles in JS -->
+                        <svg viewBox="0 0 24 24" id="layout-icon"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3zm0-4c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/></svg>
+                    </button>
+                </div>
+            </h1>
+    
+            <!-- Brushes -->
+            <div class="control-group">
+                <div class="control-label">Module</div>
+                <div class="btn-grid-modules">
+                    <button class="mode-btn active" data-mode="basic" title="Standard Line">
+                        <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                        Line
+                    </button>
+                    <button class="mode-btn" data-mode="speed" title="Thickness based on Speed (Velocity)">
+                        <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+                        Speed
+                    </button>
+                    <button class="mode-btn" data-mode="airbrush" title="Particle Spray / Airbrush">
+                        <svg viewBox="0 0 24 24"><path d="M7 20c0 .55.45 1 1 1h8c.55 0 1-.45 1-1v-3H7v3zm3-11c-1.1 0-2 .9-2 2v4h8v-4c0-1.1-.9-2-2-2h-4zm-4.9 1.3l1.4 1.4c.4.4.4 1 0 1.4-.4.4-1 .4-1.4 0l-1.4-1.4c-.4-.4-.4-1 0-1.4.4-.4 1-.4 1.4 0zM4 12c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm17.9-1.7c.4.4.4 1 0 1.4l-1.4 1.4c-.4.4-1 .4-1.4 0-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0zM22 12c0 1.1.9 2 2 2s2-.9 2-2-.9-2-2-2-2 .9-2 2z"/></svg>
+                        Airbrush
+                    </button>
+                    <button class="mode-btn" data-mode="vector" title="Custom Vector Brush">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                        Vector
+                    </button>
+                    <button class="mode-btn" data-mode="outline" title="Lasso Fill / Solid Outline">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z"/></svg>
+                        Fill
+                    </button>
+                    <button class="mode-btn" data-mode="smear" title="Smear / Smudge Tool">
+                        <svg viewBox="0 0 24 24"><path d="M15 4c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm-2 13c-.83 0-1.5-.67-1.5-1.5S12.17 14 13 14s1.5.67 1.5 1.5S13.83 17 13 17zm3-5c-.83 0-1.5-.67-1.5-1.5S15.17 9 16 9s1.5.67 1.5 1.5S16.83 12 16 12zm3-3c-.83 0-1.5-.67-1.5-1.5S18.17 6 19 6s1.5.67 1.5 1.5S19.83 9 19 9z"/><path d="M2 12c0-2.76 2.24-5 5-5v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v2c-2.76 0-5-2.24-5-5z"/></svg>
+                        Smear
+                    </button>
+                    <button class="mode-btn" data-mode="blend" title="Soft Blend / Blur">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" style="display:none;"/><path d="M6 12c0-3.31 2.69-6 6-6s6 2.69 6 6-2.69 6-6 6-6-2.69-6-6zm6 4c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4z" opacity=".3"/><path d="M12 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                        Blend
+                    </button>
+                    <button class="mode-btn" data-mode="eraser" title="Eraser (Background Color)">
+                        <svg viewBox="0 0 24 24"><path d="M15.14 3c-.51 0-1.02.2-1.41.59L2.59 14.73c-.78.77-.78 2.04 0 2.83L5.03 20h7.66l8.72-8.72c.78-.78.78-2.05 0-2.83l-4.85-4.86c-.39-.39-.91-.59-1.42-.59zM17 18l-2 2h-5l-2-2h9z"/></svg>
+                        Eraser
+                    </button>
+                </div>
+                
+                <!-- Vector Library UI (Only visible in Vector Mode) -->
+                <div id="vector-panel" class="control-group" style="display:none; margin-top:5px; border-top:1px solid #444; padding-top:5px;">
+                    <div class="control-label">Vector Library</div>
+                    
+                    <button class="file-upload-btn" title="Upload SVG files">
+                        <svg viewBox="0 0 24 24" style="width:14px; height:14px; margin-right:5px;"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                        Upload SVGs
+                        <input type="file" id="vector-upload" accept=".svg" multiple>
+                    </button>
+    
+                    <div id="vector-list" class="vector-library visible">
+                        <div style="padding:10px; text-align:center; color:#666; font-size:10px;">No vectors loaded</div>
+                    </div>
+                </div>
+            </div>
+    
+            <!-- Affects -->
+            <div class="control-group">
+                <div class="control-label">Affect</div>
+                <div class="btn-grid-affects">
+                    <button id="btn-mirror-x" title="Mirror Horizontal">
+                        <svg viewBox="0 0 24 24"><path d="M12 2v20M6 6l-4 4 4 4M18 6l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                        Mir X
+                    </button>
+                    <button id="btn-mirror-y" title="Mirror Vertical">
+                        <svg viewBox="0 0 24 24"><path d="M2 12h20M6 6l4-4 4 4M6 18l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                        Mir Y
+                    </button>
+                    <button id="btn-radial" title="Radial Symmetry">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><circle cx="12" cy="12" r="2"/><path d="M12 4v2M12 18v2M4 12h2M18 12h2M6.34 6.34l1.42 1.42M16.24 16.24l1.42 1.42M6.34 17.66l1.42-1.42M16.24 7.76l1.42-1.42"/></svg>
+                        Radial
+                    </button>
+                    <button id="btn-mic" title="Control Size with Voice">
+                        <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                        Mic
+                    </button>
+                    <button id="btn-drift" title="Drift - Auto Color Change">
+                        <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                        Drift
+                    </button>
+                </div>
+            </div>
+    
+            <!-- Settings -->
+            <div class="control-group">
+                <div class="control-label">Properties</div>
+                
+                <div class="color-wrapper">
+                    <input type="color" id="color-picker" value="#ffffff">
+                    <span style="font-size: 11px; color: #aaa;">Brush Color</span>
+                </div>
+    
+                <!-- Quick Colors -->
+                <div class="quick-colors">
+                    <div id="swatch-prev" class="color-swatch" title="Swap with Previous Color" style="background-color: #000000;" data-color="#000000"></div>
+                    <!-- Favs -->
+                    <div class="color-swatch" title="Right-click to save current color" style="background-color: #ffffff;" data-color="#ffffff"></div>
+                    <div class="color-swatch" title="Right-click to save current color" style="background-color: #000000;" data-color="#000000"></div>
+                    <div class="color-swatch" title="Right-click to save current color" style="background-color: #808080;" data-color="#808080"></div>
+                    <div class="color-swatch" title="Right-click to save current color" style="background-color: #d32f2f;" data-color="#d32f2f"></div>
+                </div>
+    
+                <!-- Global Properties (Moved Up) -->
+                <label style="font-size: 10px; display:flex; justify-content:space-between; margin-top:5px;">Opacity <span id="opacity-val">50%</span></label>
+                <input type="range" id="opacity-range" min="1" max="100" value="50">
+                
+                <label style="font-size: 10px; display:flex; justify-content:space-between; margin-top:5px;">Base Size <span id="size-val">5px</span></label>
+                <input type="range" id="size-range" min="1" max="100" value="5">
+
+                <!-- Radial Settings (Hidden by default) -->
+                <div id="radial-settings" style="display:none; border-left: 2px solid #555; padding-left: 8px; margin-top: 5px;">
+                    <label style="font-size: 10px; display:flex; justify-content:space-between;">Radial Divisions <span id="radial-val">6</span></label>
+                    <input type="range" id="radial-range" min="2" max="36" value="6">
+                </div>
+
+                <!-- Dynamics -->
+                <div class="control-label" style="margin-top:8px;">Dynamics</div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="check-pressure" checked> <label for="check-pressure">Pressure Sensitivity</label>
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="check-velocity" checked> <label for="check-velocity">Velocity (Speed)</label>
+                </div>
+    
+                <!-- Palette Control Panel (Drift Mode) -->
+                <div id="palette-panel" class="palette-panel" style="margin-top:8px;">
+                    <div class="control-label">Drift Palette</div>
+                    <div id="palette-preview" class="palette-preview"></div>
+                    <div class="palette-btns">
+                        <button id="btn-pal-random">Randomize</button>
+                        <button id="btn-pal-harmony">Harmony</button>
+                    </div>
+                    <label style="font-size: 10px;">Fade Speed</label>
+                    <input type="range" id="drift-speed" min="1" max="50" value="10">
+                </div>
+    
+                 <button id="btn-blind" style="width:100%; margin-top:5px;">Blind Mode (Hide Cursor)</button>
+            </div>
+    
+            <!-- Actions -->
+            <div class="control-group" style="margin-top: auto; border-top: 1px solid #444; padding-top: 10px;">
+                <div class="export-container">
+                    <button id="btn-export-menu" style="width:100%; background: #222; display: flex; flex-direction: row; justify-content: space-between; padding: 0 15px;">
+                        <span>Export Art</span>
+                        <svg viewBox="0 0 24 24" style="width:14px;"><path d="M7 10l5 5 5-5z"/></svg>
+                    </button>
+                    <div id="export-dropdown" class="export-menu">
+                        <button id="btn-save-png">
+                            <svg viewBox="0 0 24 24" style="width:16px; fill:#888;"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                            PNG (High Quality)
+                        </button>
+                        <button id="btn-save-jpg">
+                            <svg viewBox="0 0 24 24" style="width:16px; fill:#888;"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                            JPG (Compressed)
+                        </button>
+                        <button id="btn-save-svg">
+                            <svg viewBox="0 0 24 24" style="width:16px; fill:#888;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                            SVG (Vector)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    
+        <div id="canvas-container">
+            <canvas id="canvas"></canvas>
+            <canvas id="preview-canvas"></canvas>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        Mic Status <div id="mic-indicator" class="mic-indicator"></div>
+    </div>
+
+<script>
+/**
+ * ALCHEMY CLONE LOGIC
+ */
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+const previewCanvas = document.getElementById('preview-canvas');
+const previewCtx = previewCanvas.getContext('2d');
+const container = document.getElementById('canvas-container');
+
+// State
+const state = {
+    isDrawing: false,
+    x: 0, 
+    y: 0,
+    lastX: 0, 
+    lastY: 0,
+    lastTime: 0, // For velocity calc
+    
+    // Settings
+    mode: 'basic', // basic, speed, airbrush, vector, outline, smear, blend, eraser
+    mirrorX: false,
+    mirrorY: false,
+    radialEnabled: false,
+    radialSegments: 6,
+    micEnabled: false, 
+    blindMode: false,
+    driftEnabled: false,
+    isDocked: false,
+    
+    // Dynamics
+    usePressure: true,
+    useVelocity: true,
+    
+    // Properties
+    baseSize: 5,
+    opacity: 0.5,
+    color: '#ffffff',
+    prevColor: '#000000', // Store previous color
+    tempColor: '#ffffff', // Temp storage for picker interaction
+    
+    // Outline Mode Data
+    currentPath: [], // Stores raw input points for outline mode
+
+    // Vector History (for SVG export)
+    vectorHistory: [],
+    currentStroke: null,
+
+    // Drift Logic
+    palette: ['#ff0000', '#00ff00', '#0000ff'],
+    driftSpeed: 10,
+    
+    // Vector Library
+    vectorSets: [], 
+
+    // Audio Context
+    audioCtx: null,
+    analyser: null,
+    dataArray: null,
+    micVolume: 0
+};
+
+// --- CANVAS SETUP ---
+function resize() {
+    const saved = canvas.toDataURL();
+    
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    previewCanvas.width = container.clientWidth;
+    previewCanvas.height = container.clientHeight;
+    
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const img = new Image();
+    img.src = saved;
+    img.onload = () => ctx.drawImage(img, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- LAYOUT ENGINE ---
+document.getElementById('btn-layout-toggle').addEventListener('click', function() {
+    state.isDocked = !state.isDocked;
+    document.body.classList.toggle('layout-docked', state.isDocked);
+    
+    // Change icon
+    const icon = this.querySelector('svg');
+    if (state.isDocked) {
+        icon.innerHTML = '<path d="M4 5v14h16V5H4zm2 2h12v10H6V7z"/>'; 
+    } else {
+        icon.innerHTML = '<path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3zm0-4c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/>';
+    }
+
+    setTimeout(resize, 50); 
+});
+
+// --- AUDIO ENGINE ---
+async function initAudio() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        state.analyser = state.audioCtx.createAnalyser();
+        const source = state.audioCtx.createMediaStreamSource(stream);
+        source.connect(state.analyser);
+        state.analyser.fftSize = 256;
+        state.dataArray = new Uint8Array(state.analyser.frequencyBinCount);
+        
+        // REMOVED: document.getElementById('mic-permission').style.display = 'none';
+        document.getElementById('mic-indicator').classList.add('on');
+        updateAudioLoop();
+    } catch (err) {
+        console.error("Audio init failed", err);
+        // Fallback message if they dismiss the prompt
+        if(state.micEnabled) {
+             alert("Could not access microphone. Please check permissions.");
+             // Turn the button back off visually
+             document.getElementById('btn-mic').classList.remove('active');
+             state.micEnabled = false;
+        }
+    }
+}
+
+function updateAudioLoop() {
+    if (!state.analyser) return;
+    requestAnimationFrame(updateAudioLoop);
+    state.analyser.getByteFrequencyData(state.dataArray);
+    let sum = 0;
+    for(let i = 0; i < state.dataArray.length; i++) sum += state.dataArray[i];
+    state.micVolume = Math.min((sum / state.dataArray.length) / 100, 1.5); 
+}
+// REMOVED: document.getElementById('mic-permission').addEventListener('click', initAudio);
+
+// --- DRIFT COLOR ENGINE ---
+function generatePalette(type) {
+    const colors = [];
+    if (type === 'random') {
+        for(let i=0; i<5; i++) {
+            colors.push(`hsl(${Math.floor(Math.random() * 360)}, ${70 + Math.random()*30}%, ${50 + Math.random()*20}%)`);
+        }
+    } else if (type === 'harmony') {
+        const baseHue = Math.random() * 360;
+        for(let i=0; i<5; i++) {
+            const hue = (baseHue + (i * 30)) % 360; 
+            colors.push(`hsl(${hue}, 70%, 60%)`);
+        }
+    }
+    state.palette = colors;
+    updatePalettePreview();
+}
+
+function updatePalettePreview() {
+    const el = document.getElementById('palette-preview');
+    el.style.background = `linear-gradient(to right, ${state.palette.join(', ')})`;
+}
+
+function getDriftColor() {
+    if (!state.driftEnabled) return state.color;
+    const speed = state.driftSpeed * 0.0005;
+    const t = Date.now() * speed;
+    const len = state.palette.length;
+    const i = Math.floor(t) % len;
+    return state.palette[i];
+}
+
+generatePalette('harmony');
+
+// --- HELPER FUNCTIONS ---
+function getPointerPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    // Correction for canvas offset
+    return { 
+        x: x - rect.left, 
+        y: y - rect.top,
+        pressure: e.pressure || 0.5 // Default pressure if not available
+    };
+}
+
+function getMirrorPoints(x, y) {
+    let points = [{x, y}];
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+
+    // 1. Apply Cartesian Mirroring
+    if (state.mirrorX) {
+        const currentLen = points.length;
+        for(let i=0; i<currentLen; i++) {
+            points.push({x: w - points[i].x, y: points[i].y});
+        }
+    }
+    if (state.mirrorY) {
+        const currentLen = points.length;
+        for(let i=0; i<currentLen; i++) {
+            points.push({x: points[i].x, y: h - points[i].y});
+        }
+    }
+
+    // 2. Apply Radial Symmetry
+    if (state.radialEnabled && state.radialSegments > 1) {
+        const radialPoints = [];
+        const angleStep = (Math.PI * 2) / state.radialSegments;
+        
+        // For every point generated by cartesian mirror (or just the original point)
+        points.forEach(pt => {
+            // Convert to relative coords from center
+            const dx = pt.x - cx;
+            const dy = pt.y - cy;
+            
+            // Rotate and create N copies
+            for (let i = 0; i < state.radialSegments; i++) {
+                const theta = i * angleStep;
+                const cos = Math.cos(theta);
+                const sin = Math.sin(theta);
+                
+                const rx = dx * cos - dy * sin;
+                const ry = dx * sin + dy * cos;
+                
+                radialPoints.push({
+                    x: cx + rx,
+                    y: cy + ry
+                });
+            }
+        });
+        points = radialPoints;
+    }
+
+    return points;
+}
+
+// --- DRAWING ENGINE ---
+
+function startDrawing(e) {
+    state.isDrawing = true;
+    const pos = getPointerPos(e);
+    [state.lastX, state.lastY] = [pos.x, pos.y];
+    state.lastTime = Date.now();
+    
+    if (state.mode === 'basic' || state.mode === 'speed') {
+        state.currentStroke = {
+            type: 'line',
+            color: getDriftColor(), 
+            width: state.baseSize,
+            opacity: state.opacity,
+            paths: []
+        };
+        const initialPoints = getMirrorPoints(pos.x, pos.y);
+        initialPoints.forEach(p => {
+             state.currentStroke.paths.push([{x: p.x, y: p.y}]);
+        });
+    } else {
+        state.currentStroke = null;
+    }
+
+    if (state.mode === 'outline') {
+        state.currentPath = [{x: pos.x, y: pos.y}];
+    } else {
+        draw(e);
+    }
+}
+
+function stopDrawing() {
+    if (!state.isDrawing) return;
+    state.isDrawing = false;
+    
+    // Finish Outline Mode
+    if (state.mode === 'outline') {
+        finishOutline();
+    }
+    
+    // Commit Vector Stroke
+    if (state.currentStroke && state.currentStroke.paths.length > 0) {
+        state.vectorHistory.push(state.currentStroke);
+    }
+    
+    state.currentStroke = null;
+    ctx.beginPath();
+}
+
+function finishOutline() {
+    if (state.currentPath.length < 3) {
+        previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        state.currentPath = [];
+        return;
+    }
+
+    const fillColor = getDriftColor();
+    ctx.fillStyle = fillColor;
+    ctx.globalAlpha = state.opacity;
+    
+    const firstPoints = getMirrorPoints(state.currentPath[0].x, state.currentPath[0].y);
+    const numInstances = firstPoints.length;
+
+    // Record for Vector Export
+    const outlineData = {
+        type: 'outline',
+        color: fillColor,
+        opacity: state.opacity,
+        polygons: []
+    };
+
+    for (let i = 0; i < numInstances; i++) {
+        ctx.beginPath();
+        
+        const polyPoints = [];
+        for (let j = 0; j < state.currentPath.length; j++) {
+            const rawPt = state.currentPath[j];
+            const mirroredPts = getMirrorPoints(rawPt.x, rawPt.y);
+            const pt = mirroredPts[i];
+            
+            polyPoints.push({x: pt.x, y: pt.y});
+            
+            if (j === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+        }
+        
+        ctx.closePath();
+        ctx.fill();
+        outlineData.polygons.push(polyPoints);
+    }
+    
+    state.vectorHistory.push(outlineData);
+    
+    previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+    state.currentPath = [];
+}
+
+function draw(e) {
+    if (!state.isDrawing) return;
+
+    const pos = getPointerPos(e);
+    const now = Date.now();
+    const dt = now - state.lastTime || 1;
+    const dx = pos.x - state.lastX;
+    const dy = pos.y - state.lastY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const velocity = dist / dt; // pixels per ms
+    
+    state.lastTime = now;
+
+    // DYNAMICS CALCULATIONS
+    let currentWidth = state.baseSize;
+    let currentAlpha = state.opacity;
+
+    // 1. Velocity Sensitivity
+    if (state.useVelocity || state.mode === 'speed') {
+        currentWidth += Math.min(velocity * 5, 20); 
+    }
+
+    // 2. Pressure Sensitivity
+    if (state.usePressure && e.pressure !== undefined && e.pressure !== 0.5) {
+        currentWidth *= e.pressure * 2; // Scale size
+        currentAlpha *= e.pressure;     // Scale opacity
+    }
+
+    // 3. Mic Sensitivity
+    if (state.micEnabled && state.micVolume > 0) {
+        currentWidth *= (1 + (state.micVolume * 5));
+    }
+
+    // Determine Color
+    // If Eraser, use background color (#1a1a1a), otherwise use Drift color
+    const strokeColor = (state.mode === 'eraser') ? '#1a1a1a' : getDriftColor();
+
+    const points = getMirrorPoints(pos.x, pos.y);
+    const lastPoints = getMirrorPoints(state.lastX, state.lastY);
+
+    if (state.mode === 'outline') {
+        state.currentPath.push({x: pos.x, y: pos.y});
+        
+        previewCtx.lineCap = 'round';
+        previewCtx.lineJoin = 'round';
+        previewCtx.lineWidth = 2; 
+        previewCtx.strokeStyle = strokeColor;
+        
+        for (let i = 0; i < points.length; i++) {
+            previewCtx.beginPath();
+            previewCtx.moveTo(lastPoints[i].x, lastPoints[i].y);
+            previewCtx.lineTo(points[i].x, points[i].y);
+            previewCtx.stroke();
+        }
+    } 
+    else {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalAlpha = currentAlpha;
+        ctx.strokeStyle = strokeColor;
+        ctx.fillStyle = strokeColor;
+
+        for (let i = 0; i < points.length; i++) {
+            const p = points[i];
+            const lp = lastPoints[i];
+
+            if (state.mode === 'airbrush') {
+                drawAirbrush(p.x, p.y, currentWidth);
+            } else if (state.mode === 'vector') {
+                drawVectorShape(p.x, p.y, currentWidth);
+            } else if (state.mode === 'smear') {
+                drawSmear(p.x, p.y, lp.x, lp.y, currentWidth);
+            } else if (state.mode === 'blend') {
+                drawBlend(p.x, p.y, currentWidth);
+            } else {
+                // Line Drawing (Basic / Speed / Eraser)
+                ctx.lineWidth = currentWidth;
+                ctx.beginPath();
+                ctx.moveTo(lp.x, lp.y);
+                ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+
+                // Record to History (append point to specific mirror path)
+                // Note: Eraser strokes are recorded as lines with BG color
+                if (state.currentStroke && state.currentStroke.paths[i]) {
+                    state.currentStroke.paths[i].push({x: p.x, y: p.y});
+                }
+            }
+        }
+    }
+
+    state.lastX = pos.x;
+    state.lastY = pos.y;
+}
+
+function drawAirbrush(x, y, size) {
+    const density = Math.floor(size * 2) + 5; 
+    const particleOpacity = state.opacity * 0.1; 
+    ctx.globalAlpha = particleOpacity;
+
+    for (let i = 0; i < density; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * size;
+        const px = x + Math.cos(angle) * r;
+        const py = y + Math.sin(angle) * r;
+        
+        ctx.beginPath();
+        ctx.arc(px, py, Math.random() * 1.5 + 0.5, 0, Math.PI * 2); 
+        ctx.fill();
+    }
+    ctx.globalAlpha = state.opacity;
+}
+
+function drawSmear(x, y, lx, ly, size) {
+    const totalDist = Math.sqrt((x - lx)**2 + (y - ly)**2);
+    if (totalDist < 1) return;
+
+    const s = size * 3; // Smear size
+    const r = s / 2;    // Radius
+
+    // Interpolation: Determine how many steps to take based on distance
+    // This prevents "gaps" or "square stamps" when moving fast
+    const steps = Math.ceil(totalDist / (r * 0.5)); 
+    
+    ctx.save();
+    
+    // We can loop to fill gaps
+    for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const curX = lx + (x - lx) * t;
+        const curY = ly + (y - ly) * t;
+        const prevX = lx + (x - lx) * (t - 1/steps); // approximate previous source
+        const prevY = ly + (y - ly) * (t - 1/steps);
+
+        // Create circular clipping path at current interpolated position
+        ctx.beginPath();
+        ctx.arc(curX, curY, r, 0, Math.PI * 2);
+        ctx.clip();
+        
+        // Use lower alpha for smoother drag
+        ctx.globalAlpha = 0.8; 
+        
+        try {
+            // Copy from slightly behind the current position
+            // This creates the "dragging paint" effect
+            ctx.drawImage(canvas,
+                prevX - r, prevY - r, s, s, // Source (where paint was)
+                curX - r, curY - r, s, s    // Dest (where paint is going)
+            );
+        } catch(e) {}
+        
+        // Reset clip for next step (although restore() handles it, 
+        // inside a loop we need to be careful. 
+        // Actually, save/restore is expensive in a loop.
+        // Better approach for perf: Just do one big clip? 
+        // No, the image needs to move. 
+        // Let's just do the simple step: Just draw the FINAL smear if steps are too high,
+        // or stick to the clip. 
+        // To keep it performant, let's just clip once per call if close, 
+        // but since we want smooth lines, we have to iterate.
+        // Optimized: We will just Restore/Save inside loop.
+        ctx.restore(); 
+        ctx.save(); 
+    }
+    
+    ctx.restore();
+    ctx.globalAlpha = state.opacity; // Reset global
+}
+
+function drawBlend(x, y, size) {
+    const s = size * 4; // Blend area is larger
+    ctx.globalAlpha = 0.1; // Very low opacity for soft mixing
+    
+    // Shake the pixels slightly to create a blur/blend effect
+    const jitterX = (Math.random() - 0.5) * (size * 0.5);
+    const jitterY = (Math.random() - 0.5) * (size * 0.5);
+    
+    try {
+        ctx.drawImage(canvas,
+            x - s/2 + jitterX, y - s/2 + jitterY, s, s,
+            x - s/2, y - s/2, s, s
+        );
+    } catch(e) {}
+    
+    ctx.globalAlpha = state.opacity; // Reset
+}
+
+function drawVectorShape(x, y, size) {
+    const activeSets = state.vectorSets.filter(s => s.enabled);
+    if (activeSets.length === 0) {
+        drawAirbrush(x, y, size);
+        return;
+    }
+    const randomSet = activeSets[Math.floor(Math.random() * activeSets.length)];
+    if (randomSet.paths.length === 0) return;
+    
+    const idx = Math.floor(Math.random() * randomSet.paths.length);
+    const pathObj = randomSet.paths[idx]; 
+    const dims = randomSet.dimensions;
+
+    ctx.save();
+    ctx.translate(x, y);
+    const rot = Math.random() * Math.PI * 2;
+    ctx.rotate(rot);
+    const contentSize = Math.max(dims.w, dims.h) || 100; 
+    const scaleFactor = (size * 3) / contentSize; 
+    ctx.scale(scaleFactor, scaleFactor);
+    ctx.translate(-dims.w / 2, -dims.h / 2);
+
+    if (Math.random() > 0.5) ctx.fill(pathObj.path2d);
+    else {
+        ctx.lineWidth = 1 / scaleFactor;
+        ctx.stroke(pathObj.path2d);
+    }
+    ctx.restore();
+
+    // Record for Export
+    state.vectorHistory.push({
+        type: 'vector',
+        d: pathObj.dString,
+        x: x,
+        y: y,
+        scale: scaleFactor,
+        rotation: rot * (180/Math.PI),
+        cx: -dims.w / 2, 
+        cy: -dims.h / 2,
+        color: ctx.fillStyle,
+        opacity: ctx.globalAlpha
+    });
+}
+
+// --- VECTOR LIBRARY LOGIC ---
+
+document.getElementById('vector-upload').addEventListener('change', function(e) {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+    files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function(ev) { parseAndAddSVG(file.name, ev.target.result); };
+        reader.readAsText(file);
+    });
+    document.querySelector('[data-mode="vector"]').click();
+});
+
+function parseAndAddSVG(filename, svgText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, "image/svg+xml");
+    const svgEl = doc.querySelector('svg');
+    let w = 100, h = 100;
+    if (svgEl) {
+        if (svgEl.viewBox.baseVal && svgEl.viewBox.baseVal.width > 0) {
+            w = svgEl.viewBox.baseVal.width;
+            h = svgEl.viewBox.baseVal.height;
+        } else if (svgEl.width.baseVal && svgEl.width.baseVal.value > 0) {
+            w = svgEl.width.baseVal.value;
+            h = svgEl.height.baseVal.value;
+        }
+    }
+    const pathEls = doc.querySelectorAll('path');
+    const pathObjects = [];
+    pathEls.forEach(p => {
+        const d = p.getAttribute('d');
+        if(d) {
+            pathObjects.push({
+                path2d: new Path2D(d),
+                dString: d
+            });
+        }
+    });
+    if (pathObjects.length > 0) {
+        state.vectorSets.push({
+            id: Date.now() + Math.random(),
+            name: filename,
+            paths: pathObjects,
+            dimensions: {w, h},
+            enabled: true
+        });
+        renderVectorList();
+    }
+}
+
+function renderVectorList() {
+    const list = document.getElementById('vector-list');
+    list.innerHTML = '';
+    if (state.vectorSets.length === 0) {
+        list.innerHTML = '<div style="padding:10px; text-align:center; color:#666; font-size:10px;">No vectors loaded</div>';
+        return;
+    }
+    state.vectorSets.forEach(set => {
+        const div = document.createElement('div');
+        div.className = 'vector-item';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = set.enabled;
+        cb.addEventListener('change', (e) => { set.enabled = e.target.checked; });
+        const span = document.createElement('span');
+        span.innerText = `${set.name} (${set.paths.length})`;
+        span.title = set.name;
+        div.appendChild(cb);
+        div.appendChild(span);
+        list.appendChild(div);
+    });
+}
+
+// --- UI EVENTS ---
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        const target = e.currentTarget;
+        target.classList.add('active');
+        state.mode = target.dataset.mode;
+        const vecPanel = document.getElementById('vector-panel');
+        vecPanel.style.display = (state.mode === 'vector') ? 'flex' : 'none';
+    });
+});
+
+document.getElementById('check-pressure').addEventListener('change', (e) => state.usePressure = e.target.checked);
+document.getElementById('check-velocity').addEventListener('change', (e) => state.useVelocity = e.target.checked);
+
+document.getElementById('btn-mirror-x').addEventListener('click', function() { state.mirrorX = !state.mirrorX; this.classList.toggle('active'); });
+document.getElementById('btn-mirror-y').addEventListener('click', function() { state.mirrorY = !state.mirrorY; this.classList.toggle('active'); });
+
+document.getElementById('btn-radial').addEventListener('click', function() {
+    state.radialEnabled = !state.radialEnabled;
+    this.classList.toggle('active');
+    document.getElementById('radial-settings').style.display = state.radialEnabled ? 'block' : 'none';
+});
+document.getElementById('radial-range').addEventListener('input', (e) => {
+    state.radialSegments = parseInt(e.target.value);
+    document.getElementById('radial-val').innerText = state.radialSegments;
+});
+
+document.getElementById('btn-mic').addEventListener('click', function() {
+    //UPDATED LOGIC: call initAudio directly
+    if (!state.audioCtx) {
+         initAudio();
+    }
+    state.micEnabled = !state.micEnabled;
+    this.classList.toggle('active');
+});
+document.getElementById('btn-blind').addEventListener('click', function() {
+    state.blindMode = !state.blindMode;
+    this.classList.toggle('active');
+    canvas.style.cursor = state.blindMode ? 'none' : 'crosshair';
+});
+
+// Drift UI
+document.getElementById('btn-drift').addEventListener('click', function() {
+    state.driftEnabled = !state.driftEnabled;
+    this.classList.toggle('active');
+    document.getElementById('palette-panel').classList.toggle('visible', state.driftEnabled);
+});
+document.getElementById('btn-pal-random').addEventListener('click', () => generatePalette('random'));
+document.getElementById('btn-pal-harmony').addEventListener('click', () => generatePalette('harmony'));
+document.getElementById('drift-speed').addEventListener('input', (e) => state.driftSpeed = parseInt(e.target.value));
+
+
+// --- COLOR MANAGEMENT ---
+const colorPicker = document.getElementById('color-picker');
+
+colorPicker.addEventListener('input', (e) => { state.color = e.target.value; });
+colorPicker.addEventListener('click', () => { state.tempColor = state.color; });
+colorPicker.addEventListener('change', (e) => { if (state.tempColor !== state.color) updatePrevColor(state.tempColor); });
+
+function updatePrevColor(col) {
+    state.prevColor = col;
+    const swatch = document.getElementById('swatch-prev');
+    swatch.style.backgroundColor = col;
+    swatch.dataset.color = col;
+}
+
+function setColor(col) {
+    state.color = col;
+    colorPicker.value = col; 
+}
+
+document.querySelectorAll('.color-swatch').forEach(s => {
+    s.addEventListener('click', function() {
+        const clickedColor = this.dataset.color;
+        if (this.id === 'swatch-prev') {
+            const current = state.color;
+            setColor(state.prevColor);
+            updatePrevColor(current);
+        } else {
+            if (state.color !== clickedColor) updatePrevColor(state.color);
+            setColor(clickedColor);
+        }
+    });
+
+    s.addEventListener('contextmenu', function(e) {
+        e.preventDefault(); 
+        if (this.id === 'swatch-prev') return;
+        this.style.backgroundColor = state.color;
+        this.dataset.color = state.color;
+        const originalBorder = this.style.borderColor;
+        this.style.borderColor = '#fff';
+        setTimeout(() => { this.style.borderColor = originalBorder; }, 200);
+    });
+});
+
+document.getElementById('opacity-range').addEventListener('input', (e) => { state.opacity = e.target.value / 100; document.getElementById('opacity-val').innerText = e.target.value + '%'; });
+document.getElementById('size-range').addEventListener('input', (e) => { state.baseSize = parseInt(e.target.value); document.getElementById('size-val').innerText = e.target.value + 'px'; });
+
+document.getElementById('btn-clear').addEventListener('click', () => { 
+    ctx.fillStyle = '#1a1a1a'; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height); 
+    state.vectorHistory = []; // Clear history
+});
+
+// Export Dropdown Logic
+const exportBtn = document.getElementById('btn-export-menu');
+const exportDropdown = document.getElementById('export-dropdown');
+
+exportBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    exportDropdown.classList.toggle('visible');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', () => {
+    exportDropdown.classList.remove('visible');
+});
+
+// EXPORT FUNCTIONS
+function saveCanvas(format) {
+    const link = document.createElement('a');
+    const ext = format === 'jpeg' ? 'jpg' : 'png';
+    link.download = `alchemy-sketch-${Date.now()}.${ext}`;
+    link.href = canvas.toDataURL(`image/${format}`, 0.9);
+    link.click();
+}
+
+function exportSVG() {
+    let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}" style="background:#1a1a1a;">`;
+    
+    // Background rect
+    svgContent += `<rect width="100%" height="100%" fill="#1a1a1a"/>`;
+
+    state.vectorHistory.forEach(item => {
+        if (item.type === 'line') {
+            item.paths.forEach(pathPoints => {
+                if (pathPoints.length < 2) return;
+                let d = `M ${pathPoints[0].x} ${pathPoints[0].y}`;
+                for(let i=1; i<pathPoints.length; i++) {
+                    d += ` L ${pathPoints[i].x} ${pathPoints[i].y}`;
+                }
+                svgContent += `<path d="${d}" stroke="${item.color}" stroke-width="${item.width}" fill="none" stroke-opacity="${item.opacity}" stroke-linecap="round" stroke-linejoin="round"/>`;
+            });
+        }
+        else if (item.type === 'outline') {
+            item.polygons.forEach(poly => {
+                let d = `M ${poly[0].x} ${poly[0].y}`;
+                for(let i=1; i<poly.length; i++) d += ` L ${poly[i].x} ${poly[i].y}`;
+                d += ' Z';
+                svgContent += `<path d="${d}" fill="${item.color}" fill-opacity="${item.opacity}"/>`;
+            });
+        }
+        else if (item.type === 'vector') {
+            const transform = `translate(${item.x},${item.y}) rotate(${item.rotation}) scale(${item.scale}) translate(${item.cx},${item.cy})`;
+            svgContent += `<path d="${item.d}" transform="${transform}" fill="${item.color}" fill-opacity="${item.opacity}"/>`;
+        }
+    });
+
+    svgContent += `</svg>`;
+    
+    const blob = new Blob([svgContent], {type: "image/svg+xml;charset=utf-8"});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `alchemy-vector-${Date.now()}.svg`;
+    link.click();
+}
+
+document.getElementById('btn-save-png').addEventListener('click', () => saveCanvas('png'));
+document.getElementById('btn-save-jpg').addEventListener('click', () => saveCanvas('jpeg'));
+document.getElementById('btn-save-svg').addEventListener('click', exportSVG);
+
+// POINTER EVENTS for Pressure support
+canvas.addEventListener('pointerdown', startDrawing);
+canvas.addEventListener('pointermove', draw);
+canvas.addEventListener('pointerup', stopDrawing);
+canvas.addEventListener('pointerout', stopDrawing);
+
+window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'c') document.getElementById('btn-clear').click();
+    if (e.key.toLowerCase() === 's') document.getElementById('btn-save-png').click();
+});
+
+renderVectorList();
+
+</script>
+</body>
+</html>
